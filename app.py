@@ -7,8 +7,13 @@ from PyPDF2 import PdfReader, PdfWriter
 
 app = Flask(__name__)
 app.secret_key = "super_secret_key_change_this"
-UPLOAD_FOLDER = 'static/uploads'
+if os.environ.get('VERCEL'):
+    UPLOAD_FOLDER = '/tmp'
+else:
+    UPLOAD_FOLDER = 'static/uploads'
+
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 os.makedirs('templates', exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
@@ -63,22 +68,22 @@ PREMIUM_CSS = """
     .btn-purple { background: linear-gradient(135deg, #a855f7, #7e22ce); }
     .btn-whatsapp { background: linear-gradient(135deg, #25D366, #128C7E); text-decoration: none; display: block; text-align: center; }
     .apps { display: flex; flex-wrap: wrap; gap: 10px; margin: 15px 0; justify-content: space-between;}
-    .apps a { 
+    .apps a {
         flex: 1 1 45%; padding: 12px 0; text-align: center; background: rgba(255,255,255,0.05);
         border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; text-decoration: none; color: white; font-weight: 500;
     }
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { border: 1px solid rgba(255,255,255,0.1); padding: 12px; text-align: center; font-size: 14px;}
     img.qr { width: 220px; height: 220px; border-radius: 15px; margin: 10px auto; display: block; background: white; padding: 10px;}
-    
+
     .status-box { padding: 25px; border-radius: 20px; text-align: center; margin-bottom: 20px; }
     .pending { background: rgba(234, 179, 8, 0.1); border: 1px solid #eab308; color: #fde047; }
-    
+
     @keyframes popup {
         0% { transform: scale(0.5); opacity: 0; }
         100% { transform: scale(1); opacity: 1; }
     }
-    .success-popup { 
+    .success-popup {
         background: rgba(34, 197, 94, 0.15); border: 2px solid #22c55e; color: #86efac;
         animation: popup 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         box-shadow: 0 0 30px rgba(34, 197, 94, 0.3);
@@ -133,17 +138,17 @@ def create_templates():
                 let name = document.getElementById('user_name').value;
                 let amt = document.getElementById('amount').value;
                 if(!name || !amt) { alert('Please enter name and amount'); return; }
-                
+
                 document.getElementById('hidden_name').value = name;
                 document.getElementById('hidden_amount').value = amt;
-                
+
                 let upi_string = `upi://pay?pa=${upi_id}&pn=Admin&am=${amt}&tr=txn1234&cu=INR`;
                 document.getElementById('qrcode').src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(upi_string)}`;
-                
+
                 document.getElementById('step1').style.display = 'none';
                 document.getElementById('step2').style.display = 'block';
             }
-            
+
             async function downloadQR() {
                 const imgSrc = document.getElementById('qrcode').src;
                 const image = await fetch(imgSrc);
@@ -165,17 +170,17 @@ def create_templates():
             document.getElementById('uploadForm').onsubmit = function(e) {
                 let btn = document.getElementById('submitBtn');
                 if(btn.disabled) {
-                    e.preventDefault(); 
+                    e.preventDefault();
                     return false;
                 }
                 btn.innerText = 'Uploading... Please wait';
-                btn.disabled = true; 
+                btn.disabled = true;
             };
         </script>
     </body></html>"""
-    
+
     status_html = """<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta http-equiv="refresh" content="2"> 
+    <meta http-equiv="refresh" content="2">
     <title>Payment Status</title>""" + PREMIUM_CSS + """</head>
     <body>
         <div class="glow"></div>
@@ -186,7 +191,7 @@ def create_templates():
                     <h3 style="color:#fde047; margin:0">⏳ Pending Approval</h3>
                     <p style="font-size:14px;">Your payment of ₹{{ amount }} is being verified. (Auto Refreshing...)</p>
                 </div>
-                <a href="https://api.whatsapp.com/send?phone=917546982355&text=Hello,%20please%20check%20my%20payment%20status.%20Name:%20{{ name }}%20Amount:%20{{ amount }}" 
+                <a href="https://api.whatsapp.com/send?phone=917546982355&text=Hello,%20please%20check%20my%20payment%20status.%20Name:%20{{ name }}%20Amount:%20{{ amount }}"
                    class="btn btn-whatsapp" target="_blank">Contact on WhatsApp</a>
             {% elif status == 'Approve' %}
                 <div class="status-box success-popup">
@@ -303,7 +308,7 @@ def create_templates():
                     window.location.href = "/download_pdf?pwd=" + encodeURIComponent(pwd);
                 }
             }
-            
+
             function resetRecords() {
                 let text = prompt("Warning: This will delete ALL payment records permanently.\\n\\nTo confirm, please type exactly:\\nCONFIRM RESET");
                 if (text === 'CONFIRM RESET') {
@@ -314,7 +319,7 @@ def create_templates():
             }
         </script>
     </body></html>"""
-    
+
     login_html = """<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Admin Login</title>""" + PREMIUM_CSS + """</head>
     <body>
         <div class="glow"></div>
@@ -340,10 +345,10 @@ def init_db():
     c = conn.cursor()
     c.execute('CREATE TABLE IF NOT EXISTS admin (id INTEGER PRIMARY KEY, username TEXT, password TEXT, upi_id TEXT)')
     c.execute('CREATE TABLE IF NOT EXISTS payments (id INTEGER PRIMARY KEY, name TEXT, amount TEXT, image_path TEXT, status TEXT)')
-    
+
     c.execute('SELECT * FROM admin')
     if not c.fetchone():
-        c.execute("INSERT INTO admin (username, password, upi_id) VALUES (?, ?, ?)", 
+        c.execute("INSERT INTO admin (username, password, upi_id) VALUES (?, ?, ?)",
                   ('7546982355', '7546982355', 'yourupi@ybl'))
     conn.commit()
     conn.close()
@@ -368,26 +373,39 @@ def upload():
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
-        
+
         conn = sqlite3.connect('database.db')
         c = conn.cursor()
         c.execute("INSERT INTO payments (name, amount, image_path, status) VALUES (?, ?, ?, 'Pending')", (name, amount, filepath))
         payment_id = c.lastrowid
         conn.commit()
         conn.close()
-        return redirect(url_for('status', pid=payment_id))
+
+        # ID ko secure token mein badalna
+        import base64
+        token = base64.urlsafe_b64encode(f"dolat_{payment_id}_secure".encode()).decode()
+        return redirect(url_for('status', pid=token))
     return "Error: No file uploaded"
 
-@app.route('/status/<int:pid>')
+@app.route('/status/<pid>')
 def status(pid):
+    import base64
+    try:
+        # Secure token se wapas ID nikalna
+        decoded = base64.urlsafe_b64decode(pid.encode()).decode()
+        real_id = int(decoded.split('_')[1])
+    except:
+        return "Invalid Payment Link"
+
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
-    c.execute("SELECT name, amount, status FROM payments WHERE id=?", (pid,))
+    c.execute("SELECT name, amount, status FROM payments WHERE id=?", (real_id,))
     data = c.fetchone()
     conn.close()
     if data:
         return render_template('status.html', name=data[0], amount=data[1], status=data[2])
     return "Not Found"
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -399,7 +417,7 @@ def login():
         c.execute('SELECT * FROM admin WHERE username=? AND password=?', (user, pw))
         admin = c.fetchone()
         conn.close()
-        
+
         if admin:
             session['logged_in'] = True
             return redirect(url_for('admin'))
@@ -411,13 +429,13 @@ def admin():
     if not session.get('logged_in'): return redirect(url_for('login'))
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
-    
+
     c.execute("SELECT id, name, amount, image_path, status FROM payments WHERE status='Pending'")
     pending_proofs = c.fetchall()
-    
+
     c.execute("SELECT id, name, amount, image_path, status FROM payments ORDER BY id DESC")
     all_records = c.fetchall()
-    
+
     c.execute('SELECT upi_id FROM admin WHERE id=1')
     res = c.fetchone()
     current_upi = res[0] if res else ""
@@ -432,14 +450,14 @@ def reset_records():
     c.execute("DELETE FROM payments") # Deletes all records
     conn.commit()
     conn.close()
-    
+
     # Clean up uploaded images folder
     folder = app.config['UPLOAD_FOLDER']
     for filename in os.listdir(folder):
         file_path = os.path.join(folder, filename)
         if os.path.isfile(file_path):
             os.remove(file_path)
-            
+
     return redirect(url_for('admin'))
 
 @app.route('/download_pdf')
@@ -458,31 +476,31 @@ def download_pdf():
     # Premium Quality PDF Generation
     pdf = FPDF()
     pdf.add_page()
-    
+
     pdf.set_font("Arial", 'B', 22)
     pdf.set_text_color(56, 189, 248) # Blue Theme
     pdf.cell(0, 15, txt="PREMIUM PAYMENT RECORDS", ln=True, align='C')
     pdf.ln(5)
-    
+
     pdf.set_fill_color(30, 41, 59)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Arial", 'B', 12)
-    
+
     pdf.cell(20, 10, "ID", border=1, fill=True, align='C')
     pdf.cell(70, 10, "Customer Name", border=1, fill=True, align='C')
     pdf.cell(40, 10, "Amount (Rs)", border=1, fill=True, align='C')
     pdf.cell(60, 10, "Status", border=1, fill=True, align='C')
     pdf.ln()
-    
+
     pdf.set_font("Arial", '', 12)
     pdf.set_text_color(0, 0, 0)
-    
+
     for i, row in enumerate(records):
         if i % 2 == 0:
             pdf.set_fill_color(241, 245, 249)
         else:
             pdf.set_fill_color(255, 255, 255)
-            
+
         pdf.cell(20, 10, str(row[0]), border=1, fill=True, align='C')
         pdf.cell(70, 10, str(row[1]), border=1, fill=True, align='C')
         pdf.cell(40, 10, str(row[2]), border=1, fill=True, align='C')
@@ -497,12 +515,12 @@ def download_pdf():
     writer = PdfWriter()
     for page in reader.pages:
         writer.add_page(page)
-        
+
     writer.encrypt(pwd)
     secure_pdf = "Payment_History_Secure.pdf"
     with open(secure_pdf, "wb") as f:
         writer.write(f)
-        
+
     os.remove(temp_pdf)
     return send_file(secure_pdf, as_attachment=True)
 
@@ -523,12 +541,12 @@ def action(pid):
     act = request.form['action']
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
-    
+
     if act == 'Delete':
         c.execute("DELETE FROM payments WHERE id=?", (pid,))
     else:
         c.execute("UPDATE payments SET status=? WHERE id=?", (act, pid))
-        
+
     conn.commit()
     conn.close()
     return redirect(url_for('admin'))
@@ -550,6 +568,19 @@ def update_admin():
 def logout():
     session.clear()
     return redirect(url_for('login'))
+# --- WHATSAPP NUMBER UPDATE ROUTE ---
+@app.route('/update_whatsapp', methods=['POST'])
+def update_whatsapp():
+    wa_no = request.form.get('whatsapp')
+    with open('whatsapp.txt', 'w') as f:
+        f.write(wa_no)
+    return redirect(request.referrer)
+
+@app.context_processor
+def inject_whatsapp():
+    import os
+    wa = open('whatsapp.txt').read().strip() if os.path.exists('whatsapp.txt') else ""
+    return dict(whatsapp_no=wa)
 
 if __name__ == '__main__':
     create_templates()

@@ -14,7 +14,6 @@ else:
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-os.makedirs('templates', exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # ANTI-CACHE SETTINGS

@@ -13,6 +13,7 @@ if os.environ.get('VERCEL'):
     UPLOAD_FOLDER = '/tmp'
 else:
     UPLOAD_FOLDER = '/tmp'
+ DB_PATH = '/tmp/database.db'
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 

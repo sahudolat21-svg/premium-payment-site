@@ -1,1 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Premium Payment</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            margin: 0; padding: 20px; font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at top left, #1e293b, #0f172a);
+            color: white; min-height: 100vh;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .glow {
+            position: fixed; width: 300px; height: 300px;
+            background: linear-gradient(to right, #38bdf8, #818cf8);
+            border-radius: 50%; filter: blur(100px); opacity: 0.15; z-index: -1;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            padding: 30px; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 100%; max-width: 400px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); margin-bottom: 20px;
+        }
+        h2, h3 { text-align: center; background: linear-gradient(to right, #e2e8f0, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+        input[type=text], input[type=number], input[type=password], input[type=file] {
+            width: 100%; padding: 12px; margin: 8px 0 20px 0; background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; color: white;
+            box-sizing: border-box; outline: none; transition: 0.3s;
+        }
+        input:focus { border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1); }
+        .btn {
+            width: 100%; padding: 14px; background: linear-gradient(135deg, #38bdf8, #6366f1);
+            border: none; border-radius: 10px; color: white; font-weight: 600; font-size: 16px;
+            cursor: pointer; transition: 0.3s; margin-bottom: 10px;
+        }
+        .btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.4); }
+        .btn:disabled { background: #475569; cursor: not-allowed; opacity: 0.7; }
+        .btn-green { background: linear-gradient(135deg, #22c55e, #16a34a); }
+        .apps { display: flex; flex-wrap: wrap; gap: 10px; margin: 15px 0; justify-content: space-between;}
+        .apps a {
+            flex: 1 1 45%; padding: 12px 0; text-align: center; background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; text-decoration: none; color: white; font-weight: 500;
+        }
+        img.qr { width: 220px; height: 220px; border-radius: 15px; margin: 10px auto; display: block; background: white; padding: 10px;}
+    </style>
+</head>
+<body>
+    <div class="glow"></div>
+    <div class="card" id="step1">
+        <h2>Payment Gateway</h2>
+        <label>Full Name</label>
+        <input type="text" id="user_name" placeholder="Enter your name" required>
+        <label>Amount (₹)</label>
+        <input type="number" id="amount" placeholder="Enter Amount" required>
+        <button class="btn" onclick="nextStep()">Proceed to Pay</button>
+    </div>
+
+    <div class="card" id="step2" style="display: none;">
+        <h2>Scan & Pay</h2>
+        <img id="qrcode" class="qr" src="" alt="QR Code">
+        <button onclick="downloadQR()" class="btn btn-green">Download QR Code</button>
+
+        <div class="apps">
+            <a href="#" onclick="payVia('tez://upi/pay')">Google Pay</a>
+            <a href="#" onclick="payVia('phonepe://pay')">PhonePe</a>
+            <a href="#" onclick="payVia('paytmmp://pay')">Paytm</a>
+            <a href="#" onclick="payVia('upi://pay')">More Apps</a>
+        </div>
+
+        <hr style="border-color: rgba(255,255,255,0.1); margin: 20px 0;">
+        <h3>Upload Payment Proof</h3>
+        <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
+            <input type="hidden" name="name" id="hidden_name">
+            <input type="hidden" name="amount" id="hidden_amount">
+            <input type="file" name="screenshot" id="screenshot" accept="image/*" required>
+            <button type="submit" id="submitBtn" class="btn">Submit Proof</button>
+        </form>
+    </div>
+
+    <script>
+        let upi_id = "{{ upi_id }}";
+        function nextStep() {
+            let name = document.getElementById('user_name').value;
+            let amt = document.getElementById('amount').value;
+            if(!name || !amt) { alert('Please enter name and amount'); return; }
+
+            document.getElementById('hidden_name').value = name;
+            document.getElementById('hidden_amount').value = amt;
+
+            let upi_string = `upi://pay?pa=${upi_id}&pn=Admin&am=${amt}&tr=txn1234&cu=INR`;
+            document.getElementById('qrcode').src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(upi_string)}`;
+
+            document.getElementById('step1').style.display = 'none';
+            document.getElementById('step2').style.display = 'block';
+        }
+
+        async function downloadQR() {
+            const imgSrc = document.getElementById('qrcode').src;
+            const image = await fetch(imgSrc);
+            const imageBlob = await image.blob();
+            const imageURL = URL.createObjectURL(imageBlob);
+            const link = document.createElement('a');
+            link.href = imageURL;
+            link.download = 'Payment_QR.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function payVia(app_url) {
+            let amt = document.getElementById('hidden_amount').value;
+            window.location.href = `${app_url}?pa=${upi_id}&pn=Admin&am=${amt}&cu=INR`;
+        }
+
+        document.getElementById('uploadForm').onsubmit = function(e) {
+            let btn = document.getElementById('submitBtn');
+            if(btn.disabled) {
+                e.preventDefault();
+                return false;
+            }
+            btn.innerText = 'Uploading... Please wait';
+            btn.disabled = true;
+        };
+    </script>
+</body>
+</html>
 

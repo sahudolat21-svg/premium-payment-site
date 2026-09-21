@@ -198,6 +198,7 @@ def create_templates():
                     <h3 style="margin:5px 0; color: white;">₹{{ amount }}</h3>
                     <p style="font-size:14px; opacity:0.8;">Thank you, {{ name }}. Your transaction has been approved.</p>
                 </div>
+                <button onclick="shareStatus()" class="btn btn-whatsapp" style="margin-top: 10px; cursor: pointer;">📤 Share Payment Status</button>
             {% else %}
                 <div class="status-box rejected">
                     <h3 style="color:#fca5a5; margin:0">❌ Payment Rejected</h3>
@@ -205,6 +206,20 @@ def create_templates():
                 </div>
             {% endif %}
         </div>
+        <script>
+            function shareStatus() {
+                if (navigator.share) {
+                    navigator.share({
+                        title: 'Payment Successful',
+                        text: 'My payment of ₹{{ amount }} was successfully approved! Name: {{ name }}',
+                        url: window.location.href
+                    }).catch(console.error);
+                } else {
+                    navigator.clipboard.writeText(window.location.href);
+                    alert('Status link copied to clipboard!');
+                }
+            }
+        </script>
     </body></html>"""
 
     admin_html = """<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Admin Dashboard</title>""" + PREMIUM_CSS + """</head>

@@ -352,14 +352,11 @@ def init_db():
 # --- ROUTES ---
 @app.route('/')
 def index():
-    conn = sqlite3.connect('database.db')
-    c = conn.cursor()
-    c.execute('SELECT upi_id FROM admin WHERE id=1')
-    res = c.fetchone()
-    upi_id = res[0] if res else ""
     conn = psycopg2.connect(os.environ.get('DATABASE_URL'))
     c = conn.cursor()
-
+    c.execute('SELECT upi_id FROM admin')
+    res = c.fetchone()
+    upi_id = res[0] if res else ""
     return render_template('index.html', upi_id=upi_id)
 
 @app.route('/upload', methods=['POST'])
@@ -395,7 +392,8 @@ def status(pid):
     except:
         return "Invalid Payment Link"
 
-    conn = sqlite3.connect('database.db')
+    conn = psycopg2.connect(os.environ.get('DATABASE_URL'))
+
     c = conn.cursor()
     c.execute("SELECT name, amount, status FROM payments WHERE id=?", (real_id,))
     data = c.fetchone()

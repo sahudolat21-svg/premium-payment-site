@@ -382,4 +382,213 @@ def upload():
 
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
-        c.execute("INSERT INTO payments (name, amount, image_path, status) VALUES (?, ?
+        c.execute(
+            "INSERT INTO payments (name, amount, image_path, status) "
+            "VALUES (?, ?, ?, 'Pending')",
+            (name, amount, filepath)
+        )
+        payment_id = c.lastrowid
+        conn.commit()
+        conn.close()
+
+        token = base64.urlsafe_b64encode(f"dolat_{payment_id}_secure".encode()).decode()
+        return redirect(url_for('status', pid=token))
+    return "Error: No file uploaded"
+
+@app.route('/status/<pid>')
+def status(pid):
+    try:
+        decoded = base64.urlsafe_b64decode(pid.encode()).decode()
+        real_id = int(decoded.split('_')[1])
+    except:
+        return "Invalid Payment Link"
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT name, amount, status FROM payments WHERE id=?", (real_id,))
+    data = c.fetchone()
+    
+    c.execute("SELECT whatsapp_number FROM admin WHERE id=1")
+    wa_res = c.fetchone()
+    whatsapp_number = wa_res[0] if wa_res else "917546982355"
+    conn.close()
+
+    if data:
+        return render_template('status.html', name=data[0], amount=data[1], status=data[2], whatsapp_number=whatsapp_number)
+    return "Not Found"
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        user = request.form['username']
+        pw = request.form['password']
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute('SELECT * FROM admin WHERE username=? AND password=?', (user, pw))
+        admin = c.fetchone()
+        conn.close()
+
+        if admin:
+            session['logged_in'] = True
+            return redirect(url_for('admin'))
+        return render_template('login.html', error="Invalid Credentials")
+    return render_template('login.html', error="")
+
+@app.route('/admin')
+def admin():
+    if not session.get('logged_in'): return redirect(url_for('login'))
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute("SELECT id, name, amount, image_path, status FROM payments WHERE status='Pending'")
+    pending_proofs = c.fetchall()
+
+    c.execute("SELECT id, name, amount, image_path, status FROM payments ORDER BY id DESC")
+    all_records = c.fetchall()
+
+    c.execute('SELECT upi_id, whatsapp_number FROM admin WHERE id=1')
+    res = c.fetchone()
+    current_upi = res[0] if res else ""
+    current_whatsapp = res[1] if res else "917546982355"
+    conn.close()
+    return render_template('admin.html', pending_proofs=pending_proofs, all_records=all_records, current_upi=current_upi, current_whatsapp=current_whatsapp)
+
+@app.route('/update_whatsapp', methods=['POST'])
+def update_whatsapp():
+    if not session.get('logged_in'): return redirect(url_for('login'))
+    new_whatsapp = request.form['new_whatsapp']
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE admin SET whatsapp_number=? WHERE id=1", (new_whatsapp,))
+    conn.commit()
+    conn.close()
+    return redirect(url_for('admin'))
+
+@app.route('/reset_records')
+def reset_records():
+    if not session.get('logged_in'): return redirect(url_for('login'))
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("DELETE FROM payments")
+    conn.commit()
+    conn.close()
+
+    folder = app.config['UPLOAD_FOLDER']
+    for filename in os.listdir(folder):
+        file_path = os.path.join(folder, filename)
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+
+    return redirect(url_for('admin'))
+
+@app.route('/download_pdf')
+def download_pdf():
+    if not session.get('logged_in'): return redirect(url_for('login'))
+    pwd = request.args.get('pwd')
+    if not pwd:
+        return "Password missing!", 400
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT id, name, amount, status FROM payments ORDER BY id DESC")
+    records = c.fetchall()
+    conn.close()
+
+    pdf = FPDF()
+    pdf.add_page()
+
+    pdf.set_font("Arial", 'B', 22)
+    pdf.set_text_color(56, 189, 248)
+    pdf.cell(0, 15, txt="PREMIUM PAYMENT RECORDS", ln=True, align='C')
+    pdf.ln(5)
+
+    pdf.set_fill_color(30, 41, 59)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Arial", 'B', 12)
+
+    pdf.cell(20, 10, "ID", border=1, fill=True, align='C')
+    pdf.cell(70, 10, "Customer Name", border=1, fill=True, align='C')
+    pdf.cell(40, 10, "Amount (Rs)", border=1, fill=True, align='C')
+    pdf.cell(60, 10, "Status", border=1, fill=True, align='C')
+    pdf.ln()
+
+    pdf.set_font("Arial", '', 12)
+    pdf.set_text_color(0, 0, 0)
+
+    for i, row in enumerate(records):
+        if i % 2 == 0:
+            pdf.set_fill_color(241, 245, 249)
+        else:
+            pdf.set_fill_color(255, 255, 255)
+
+        pdf.cell(20, 10, str(row[0]), border=1, fill=True, align='C')
+        pdf.cell(70, 10, str(row[1]), border=1, fill=True, align='C')
+        pdf.cell(40, 10, str(row[2]), border=1, fill=True, align='C')
+        pdf.cell(60, 10, str(row[3]), border=1, fill=True, align='C')
+        pdf.ln()
+
+    temp_pdf = "temp_records.pdf"
+    pdf.output(temp_pdf)
+
+    reader = PdfReader(temp_pdf)
+    writer = PdfWriter()
+    for page in reader.pages:
+        writer.add_page(page)
+
+    writer.encrypt(pwd)
+    secure_pdf = "Payment_History_Secure.pdf"
+    with open(secure_pdf, "wb") as f:
+        writer.write(f)
+
+    os.remove(temp_pdf)
+    return send_file(secure_pdf, as_attachment=True)
+
+@app.route('/update_upi', methods=['POST'])
+def update_upi():
+    if not session.get('logged_in'): return redirect(url_for('login'))
+    new_upi = request.form['new_upi']
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE admin SET upi_id=? WHERE id=1", (new_upi,))
+    conn.commit()
+    conn.close()
+    return redirect(url_for('admin'))
+
+@app.route('/action/<int:pid>', methods=['POST'])
+def action(pid):
+    if not session.get('logged_in'): return redirect(url_for('login'))
+    act = request.form['action']
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    if act == 'Delete':
+        c.execute("DELETE FROM payments WHERE id=?", (pid,))
+    else:
+        c.execute("UPDATE payments SET status=? WHERE id=?", (act, pid))
+
+    conn.commit()
+    conn.close()
+    return redirect(url_for('admin'))
+
+@app.route('/update_admin', methods=['POST'])
+def update_admin():
+    if not session.get('logged_in'): return redirect(url_for('login'))
+    new_user = request.form['new_user']
+    new_pass = request.form['new_pass']
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE admin SET username=?, password=? WHERE id=1", (new_user, new_pass))
+    conn.commit()
+    conn.close()
+    session.clear()
+    return redirect(url_for('login'))
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+if __name__ == '__main__':
+    create_templates()
+    init_db()
+    app.run(host='0.0.0.0', port=5000, debug=True)

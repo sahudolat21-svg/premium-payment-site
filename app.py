@@ -1,4 +1,6 @@
 import os
+import psycopg2
+import os
 import sqlite3
 from flask import Flask, render_template, request, redirect, url_for, session, send_file
 from werkzeug.utils import secure_filename
@@ -340,15 +342,10 @@ def create_templates():
 
 # --- DATABASE SETUP ---
 def init_db():
-    conn = sqlite3.connect('database.db')
+    conn = psycopg2.connect(os.environ.get('DATABASE_URL'))
     c = conn.cursor()
-    c.execute('CREATE TABLE IF NOT EXISTS admin (id INTEGER PRIMARY KEY, username TEXT, password TEXT, upi_id TEXT)')
-    c.execute('CREATE TABLE IF NOT EXISTS payments (id INTEGER PRIMARY KEY, name TEXT, amount TEXT, image_path TEXT, status TEXT)')
-
-    c.execute('SELECT * FROM admin')
-    if not c.fetchone():
-        c.execute("INSERT INTO admin (username, password, upi_id) VALUES (?, ?, ?)",
-                  ('7546982355', '7546982355', 'yourupi@ybl'))
+    c.execute('CREATE TABLE IF NOT EXISTS admin (upi_id TEXT, password TEXT)')
+    # Agar aur bhi tables hain toh unhe yahan rakh sakte hain
     conn.commit()
     conn.close()
 
@@ -360,7 +357,9 @@ def index():
     c.execute('SELECT upi_id FROM admin WHERE id=1')
     res = c.fetchone()
     upi_id = res[0] if res else ""
-    conn.close()
+    conn = psycopg2.connect(os.environ.get('DATABASE_URL'))
+    c = conn.cursor()
+
     return render_template('index.html', upi_id=upi_id)
 
 @app.route('/upload', methods=['POST'])
@@ -373,12 +372,12 @@ def upload():
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
 
-        conn = sqlite3.connect('database.db')
+        conn = psycopg2.connect(os.environ.get('DATABASE_URL'))
         c = conn.cursor()
-        c.execute("INSERT INTO payments (name, amount, image_path, status) VALUES (?, ?, ?, 'Pending')", (name, amount, filepath))
-        payment_id = c.lastrowid
+        c.execute("INSERT INTO payments (name, amount, screenshot) VALUES (%s, %s, %s)", (name, amount, filename))
         conn.commit()
         conn.close()
+
 
         # ID ko secure token mein badalna
         import base64

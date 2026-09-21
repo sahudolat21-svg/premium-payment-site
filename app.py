@@ -1,7 +1,7 @@
 import os
 import sqlite3
 import base64
-from flask import Flask, render_template, request, redirect, url_for, session, send_file
+from flask import Flask, render_template, request, redirect, url_for, session, send_file, send_from_directory
 from werkzeug.utils import secure_filename
 from fpdf import FPDF
 from PyPDF2 import PdfReader, PdfWriter
@@ -394,6 +394,11 @@ def upload():
         token = base64.urlsafe_b64encode(f"dolat_{payment_id}_secure".encode()).decode()
         return redirect(url_for('status', pid=token))
     return "Error: No file uploaded"
+
+# --- SERVE UPLOADED SCREENSHOTS FROM /tmp ---
+@app.route('/tmp/<path:filename>')
+def uploaded_file(filename):
+    return send_from_directory('/tmp', filename)
 
 @app.route('/status/<pid>')
 def status(pid):

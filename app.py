@@ -262,7 +262,7 @@ def create_templates():
                         <tr>
                             <td>{{ row[1] }}</td>
                             <td>₹{{ row[2] }}</td>
-                            <td><a href="/{{ row[3] }}" target="_blank"><img src="/{{ row[3] }}" style="width:60px; border-radius:5px;"></a></td>
+                            <td><a href="/tmp/{{ row[3] }}" target="_blank"><img src="/tmp/{{ row[3] }}" style="width:60px; border-radius:5px;"></a></td>
                             <td style="display:flex; gap:5px; justify-content:center;">
                                 <form action="/action/{{ row[0] }}" method="post" style="margin:0;">
                                     <button name="action" value="Approve" class="btn btn-green" style="padding:8px; font-size:12px; margin:0;">✔ Approve</button>
@@ -385,7 +385,7 @@ def upload():
         c.execute(
             "INSERT INTO payments (name, amount, image_path, status) "
             "VALUES (?, ?, ?, 'Pending')",
-            (name, amount, filepath)
+            (name, amount, filename)
         )
         payment_id = c.lastrowid
         conn.commit()

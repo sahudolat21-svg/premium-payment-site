@@ -12,7 +12,7 @@ app.secret_key = "super_secret_key_change_this"
 if os.environ.get('VERCEL'):
     UPLOAD_FOLDER = '/tmp'
 else:
-    UPLOAD_FOLDER = 'static/uploads'
+    UPLOAD_FOLDER = '/tmp'
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
